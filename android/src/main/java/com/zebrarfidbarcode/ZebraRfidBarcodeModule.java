@@ -27,14 +27,15 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule implement
   public static final String NAME = "ZebraRfidBarcode";
   private RFIDReaderInterface rfidInterface;
   private BarcodeScannerInterface scannerInterface;
-  private List<DCSScannerInfo> availableScannerList;
+  private List<DCSScannerInfo> availableScannerList = new ArrayList<>();
   private final String ON_DEVICE_CONNECTED = "onZebraConnected";
   private final String ON_RFID = "onZebraRFIDReaded";
   private final String ON_BARCODE = "onZebraBarcodeScanned";
 
   public ZebraRfidBarcodeModule(ReactApplicationContext reactContext) {
     super(reactContext);
-    configureDevice();
+    // Don't configure device here - requires BLUETOOTH_CONNECT permission
+    // Will be configured lazily when getAllDevices() or connectToDevice() is called
   }
 
   private void configureDevice() {
@@ -62,6 +63,10 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule implement
   @ReactMethod
   public void getAllDevices(Promise promise) {
     try {
+      // Lazy initialization - configure device on first call
+      if (availableScannerList.isEmpty() && scannerInterface == null) {
+        configureDevice();
+      }
       WritableArray listDevices = Arguments.createArray();
       for (DCSScannerInfo scannerInfo : availableScannerList) {
         listDevices.pushString(scannerInfo.getScannerName());
@@ -74,9 +79,9 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule implement
 
   @ReactMethod
   public void connectToDevice(String deviceName) {
+    // Lazy initialization - configure device on first call
     if (scannerInterface == null) {
-      scannerInterface = new BarcodeScannerInterface(this);
-      availableScannerList = scannerInterface.getAvailableScanners(getReactApplicationContext());
+      configureDevice();
     }
 
     for (int i = 0; i < availableScannerList.size(); i++) {
@@ -94,7 +99,9 @@ public class ZebraRfidBarcodeModule extends ReactContextBaseJavaModule implement
     sendEvent(getReactApplicationContext(), ON_DEVICE_CONNECTED, params);
   }
 
-  @ReactMethod
+  // Removed @ReactMethod annotation - this is internal callback only
+  // Called by onRFIDRead(), not directly from JavaScript
+  // TurboModules don't support ArrayList parameters in @ReactMethod
   public void sendRFID(ArrayList<String> listRfid) {
     WritableMap params = Arguments.createMap();
 
